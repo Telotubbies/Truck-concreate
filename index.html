@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Concrete Mixer Drum Detection Pipeline</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1f3050;
+    --accent: #00d4ff;
+    --accent2: #00ff9d;
+    --accent3: #ff6b35;
+    --accent4: #a855f7;
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --warn: #fbbf24;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Sarabun', sans-serif;
+    min-height: 100vh;
+    padding: 2rem 1rem;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: 
+      radial-gradient(ellipse at 20% 20%, rgba(0,212,255,0.05) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 80%, rgba(0,255,157,0.04) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding: 2rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    position: relative;
+    overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent));
+  }
+  .header-badge {
+    display: inline-block;
+    padding: 4px 14px;
+    border: 1px solid var(--accent);
+    border-radius: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--accent);
+    margin-bottom: 1rem;
+    letter-spacing: 2px;
+  }
+  .header h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .header p {
+    color: var(--text-dim);
+    font-size: 0.95rem;
+  }
+
+  /* Pipeline Flow */
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-bottom: 3rem;
+  }
+
+  .pipeline-step {
+    display: flex;
+    gap: 1rem;
+    position: relative;
+  }
+
+  .step-connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    width: 48px;
+  }
+
+  .step-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    border: 2px solid;
+    position: relative;
+    z-index: 2;
+  }
+
+  .step-line {
+    width: 2px;
+    flex: 1;
+    min-height: 20px;
+  }
+
+  .step-body {
+    flex: 1;
+    padding-bottom: 1.5rem;
+  }
+
+  .step-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .step-card:hover { border-color: var(--accent); }
+  .step-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+  }
+
+  /* Step colors */
+  .step-input .step-circle { background: rgba(100,116,139,0.15); border-color: #64748b; color: #94a3b8; }
+  .step-input .step-line { background: linear-gradient(to bottom, #64748b, #00d4ff); }
+  .step-input .step-card::before { background: #64748b; }
+
+  .step-detect .step-circle { background: rgba(0,212,255,0.1); border-color: var(--accent); color: var(--accent); }
+  .step-detect .step-line { background: linear-gradient(to bottom, var(--accent), var(--accent2)); }
+  .step-detect .step-card::before { background: var(--accent); }
+
+  .step-crop .step-circle { background: rgba(168,85,247,0.1); border-color: var(--accent4); color: var(--accent4); }
+  .step-crop .step-line { background: linear-gradient(to bottom, var(--accent4), var(--warn)); }
+  .step-crop .step-card::before { background: var(--accent4); }
+
+  .step-flow .step-circle { background: rgba(251,191,36,0.1); border-color: var(--warn); color: var(--warn); }
+  .step-flow .step-line { background: linear-gradient(to bottom, var(--warn), var(--accent2)); }
+  .step-flow .step-card::before { background: var(--warn); }
+
+  .step-decision .step-circle { background: rgba(0,255,157,0.1); border-color: var(--accent2); color: var(--accent2); }
+  .step-decision .step-card::before { background: var(--accent2); }
+
+  .step-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 0.3rem;
+    opacity: 0.6;
+  }
+  .step-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 0.6rem;
+  }
+  .step-desc {
+    font-size: 0.88rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  /* Tags */
+  .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 0.8rem; }
+  .tag {
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    border: 1px solid;
+  }
+  .tag-blue { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.06); }
+  .tag-green { border-color: var(--accent2); color: var(--accent2); background: rgba(0,255,157,0.06); }
+  .tag-orange { border-color: var(--accent3); color: var(--accent3); background: rgba(255,107,53,0.06); }
+  .tag-purple { border-color: var(--accent4); color: var(--accent4); background: rgba(168,85,247,0.06); }
+  .tag-yellow { border-color: var(--warn); color: var(--warn); background: rgba(251,191,36,0.06); }
+
+  /* Decision box */
+  .decision-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-top: 0.8rem;
+  }
+  .decision-yes, .decision-no {
+    padding: 0.75rem;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.88rem;
+  }
+  .decision-yes { background: rgba(0,255,157,0.08); border: 1px solid var(--accent2); color: var(--accent2); }
+  .decision-no { background: rgba(255,107,53,0.08); border: 1px solid var(--accent3); color: var(--accent3); }
+  .decision-icon { font-size: 1.2rem; display: block; margin-bottom: 4px; }
+
+  /* Section headers */
+  .section-header {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin: 2.5rem 0 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .section-header::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Model detail cards */
+  .model-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  @media (max-width: 600px) { .model-grid { grid-template-columns: 1fr; } }
+
+  .model-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .model-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .model-card.blue::before { background: var(--accent); }
+  .model-card.green::before { background: var(--accent2); }
+  .model-card.purple::before { background: var(--accent4); }
+  .model-card.orange::before { background: var(--accent3); }
+
+  .model-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 0.3rem;
+  }
+  .model-role {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 0.8rem;
+  }
+  .model-stat {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .model-stat:last-child { border-bottom: none; }
+  .stat-key { color: var(--text-dim); }
+  .stat-val { font-family: 'JetBrains Mono', monospace; }
+
+  /* Code block */
+  .code-block {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: 0.75rem;
+  }
+  .code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: #161b22;
+    border-bottom: 1px solid var(--border);
+  }
+  .code-lang {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+  .code-dots { display: flex; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot-r { background: #ff5f57; }
+  .dot-y { background: #febc2e; }
+  .dot-g { background: #28c840; }
+  pre {
+    padding: 1rem 1.25rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.7;
+    overflow-x: auto;
+    color: #cdd9e5;
+  }
+  .c-green { color: #7ee787; }
+  .c-blue { color: #79c0ff; }
+  .c-orange { color: #ffa657; }
+  .c-purple { color: #d2a8ff; }
+  .c-yellow { color: #e3b341; }
+  .c-comment { color: #8b949e; }
+
+  /* Tips */
+  .tips-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+  @media (max-width: 600px) { .tips-grid { grid-template-columns: 1fr; } }
+
+  .tip-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+  }
+  .tip-icon { font-size: 1.3rem; margin-bottom: 6px; }
+  .tip-title { font-weight: 700; font-size: 0.9rem; margin-bottom: 4px; }
+  .tip-text { font-size: 0.82rem; color: var(--text-dim); line-height: 1.55; }
+
+  /* Rotation logic */
+  .logic-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+  }
+  .logic-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .logic-row:last-child { border-bottom: none; }
+  .logic-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent);
+    width: 24px;
+    flex-shrink: 0;
+    padding-top: 2px;
+  }
+  .logic-content { font-size: 0.88rem; line-height: 1.55; }
+  .logic-content strong { color: var(--accent2); font-weight: 600; }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 1.5rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    font-family: 'JetBrains Mono', monospace;
+    border-top: 1px solid var(--border);
+    margin-top: 3rem;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-badge">CV PIPELINE GUIDE</div>
+    <h1>🔄 Concrete Mixer Drum<br>Rotation Detection</h1>
+    <p>Pipeline สำหรับตรวจจับการหมุนของโม่ปูนด้วย Computer Vision</p>
+  </div>
+
+  <!-- Pipeline Steps -->
+  <div class="section-header">Pipeline Overview</div>
+
+  <div class="pipeline">
+
+    <!-- Step 0: Input -->
+    <div class="pipeline-step step-input">
+      <div class="step-connector">
+        <div class="step-circle">▶</div>
+        <div class="step-line"></div>
+      </div>
+      <div class="step-body">
+        <div class="step-card">
+          <div class="step-label">Input</div>
+          <div class="step-title">Video Source</div>
+          <div class="step-desc">รับ video จาก CCTV / กล้องติดรถ / กล้องภายนอก ในรูปแบบ MP4, RTSP Stream</div>
+          <div class="tag-row">
+            <span class="tag tag-blue">MP4 / AVI</span>
+            <span class="tag tag-blue">RTSP Stream</span>
+            <span class="tag tag-blue">Webcam</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 1: YOLO Detection -->
+    <div class="pipeline-step step-detect">
+      <div class="step-connector">
+        <div class="step-circle">01</div>
+        <div class="step-line"></div>
+      </div>
+      <div class="step-body">
+        <div class="step-card">
+          <div class="step-label">Step 1 — Object Detection</div>
+          <div class="step-title">🟡 YOLOv8n — Detect รถ + โม่</div>
+          <div class="step-desc">ใช้ YOLOv8n ตรวจหาตำแหน่งของ drum โดยตรง (ดีกว่า detect รถทั้งคัน เพราะ crop ได้ตรงกว่า) — <strong>ต้อง train model เอง</strong> ด้วย dataset ที่มี label ของ drum</div>
+          <div class="tag-row">
+            <span class="tag tag-blue">YOLOv8n</span>
+            <span class="tag tag-yellow">ต้อง Train ❗</span>
+            <span class="tag tag-green">Class: drum</span>
+            <span class="tag tag-green">Class: mixer_truck</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Crop -->
+    <div class="pipeline-step step-crop">
+      <div class="step-connector">
+        <div class="step-circle">02</div>
+        <div class="step-line"></div>
+      </div>
+      <div class="step-body">
+        <div class="step-card">
+          <div class="step-label">Step 2 — ROI Extraction</div>
+          <div class="step-title">✂️ Crop เฉพาะ Drum Region</div>
+          <div class="step-desc">ใช้ bounding box จาก YOLO crop เฉพาะส่วนโม่ออกมา เพื่อลด noise จากส่วนอื่น (ตัวรถ, พื้นหลัง) ก่อนเข้า Optical Flow — ทำให้ผลแม่นขึ้นมาก</div>
+          <div class="tag-row">
+            <span class="tag tag-purple">BBox Crop</span>
+            <span class="tag tag-purple">Padding 5-10%</span>
+            <span class="tag tag-green">ไม่ต้อง Train ✅</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Optical Flow -->
+    <div class="pipeline-step step-flow">
+      <div class="step-connector">
+        <div class="step-circle">03</div>
+        <div class="step-line"></div>
+      </div>
+      <div class="step-body">
+        <div class="step-card">
+          <div class="step-label">Step 3 — Motion Analysis</div>
+          <div class="step-title">🌊 Optical Flow — วิเคราะห์การเคลื่อนที่</div>
+          <div class="step-desc">วิเคราะห์ pixel movement ภายใน drum crop เพื่อดูว่า pattern ของการเคลื่อนที่มีลักษณะ <strong>"หมุนวน" (circular/rotational)</strong> หรือเปล่า</div>
+          <div class="tag-row">
+            <span class="tag tag-yellow">Farneback (แนะนำ)</span>
+            <span class="tag tag-yellow">Lucas-Kanade</span>
+            <span class="tag tag-orange">RAFT (GPU)</span>
+            <span class="tag tag-green">ไม่ต้อง Train ✅</span>
+          </div>
+          <div class="code-block" style="margin-top:1rem;">
+            <div class="code-header">
+              <div class="code-dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+              <span class="code-lang">PYTHON</span>
+            </div>
+            <pre><span class="c-comment"># Farneback Optical Flow บน drum crop</span>
+flow = cv2.calcOpticalFlowFarneback(
+    prev_gray, curr_gray,
+    <span class="c-blue">None</span>,
+    pyr_scale=<span class="c-orange">0.5</span>,
+    levels=<span class="c-orange">3</span>,
+    winsize=<span class="c-orange">15</span>,
+    iterations=<span class="c-orange">3</span>,
+    poly_n=<span class="c-orange">5</span>,
+    poly_sigma=<span class="c-orange">1.2</span>,
+    flags=<span class="c-orange">0</span>
+)
+<span class="c-comment"># flow shape: (H, W, 2) → (dx, dy) ต่อ pixel</span>
+mag, ang = cv2.cartToPolar(flow[...,<span class="c-orange">0</span>], flow[...,<span class="c-orange">1</span>])</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4: Decision -->
+    <div class="pipeline-step step-decision">
+      <div class="step-connector">
+        <div class="step-circle">04</div>
+      </div>
+      <div class="step-body">
+        <div class="step-card">
+          <div class="step-label">Step 4 — Decision Logic</div>
+          <div class="step-title">⚖️ ตัดสิน: หมุน / ไม่หมุน</div>
+          <div class="step-desc">คำนวณ "Rotational Score" จาก flow vectors — ดูว่า distribution ของ angle มีลักษณะหมุนรอบจุดศูนย์กลางหรือไม่</div>
+          <div class="decision-split">
+            <div class="decision-yes">
+              <span class="decision-icon">🟢</span>
+              <strong>ROTATING</strong><br>
+              <small>score ≥ threshold</small>
+            </div>
+            <div class="decision-no">
+              <span class="decision-icon">🔴</span>
+              <strong>NOT ROTATING</strong><br>
+              <small>score &lt; threshold</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Rotation Logic Detail -->
+  <div class="section-header">Rotation Detection Logic</div>
+
+  <div class="logic-box" style="margin-bottom: 1.5rem;">
+    <div class="logic-row">
+      <div class="logic-num">①</div>
+      <div class="logic-content">คำนวณ <strong>flow magnitude</strong> ต่อ pixel — ถ้า mag เฉลี่ยต่ำมาก = ไม่มีการเคลื่อนที่เลย (หยุดนิ่ง)</div>
+    </div>
+    <div class="logic-row">
+      <div class="logic-num">②</div>
+      <div class="logic-content">แบ่ง drum เป็น grid (เช่น 4×4) คำนวณ <strong>mean angle</strong> ในแต่ละ cell — drum หมุน = flow ใน cell ซ้ายชี้ลง, ขวาชี้ขึ้น (หรือกลับ)</div>
+    </div>
+    <div class="logic-row">
+      <div class="logic-num">③</div>
+      <div class="logic-content">คำนวณ <strong>Curl / Rotational Component</strong> ของ vector field — ค่า curl สูง = มีการหมุนวน</div>
+    </div>
+    <div class="logic-row">
+      <div class="logic-num">④</div>
+      <div class="logic-content"><strong>Average ผลใน N frames</strong> (เช่น 5-10 frames) ก่อนตัดสิน เพื่อลด false positive จาก noise หรือการสั่นของรถ</div>
+    </div>
+    <div class="logic-row">
+      <div class="logic-num">⑤</div>
+      <div class="logic-content">ตั้ง <strong>threshold</strong> จาก validation data — เริ่มจาก mean_magnitude > 1.5 px/frame และ curl_score > 0.3</div>
+    </div>
+  </div>
+
+  <!-- Model Detail -->
+  <div class="section-header">Model Specifications</div>
+
+  <div class="model-grid">
+    <div class="model-card blue">
+      <div class="model-name">YOLOv8n</div>
+      <div class="model-role">Object Detection (Primary)</div>
+      <div class="model-stat"><span class="stat-key">Size</span><span class="stat-val" style="color:var(--accent2)">~6 MB</span></div>
+      <div class="model-stat"><span class="stat-key">Speed (CPU)</span><span class="stat-val">~20-30 FPS</span></div>
+      <div class="model-stat"><span class="stat-key">Input</span><span class="stat-val">640×640</span></div>
+      <div class="model-stat"><span class="stat-key">Train Data</span><span class="stat-val" style="color:var(--warn)">200+ imgs min</span></div>
+      <div class="model-stat"><span class="stat-key">Label Tool</span><span class="stat-val">Roboflow / CVAT</span></div>
+    </div>
+    <div class="model-card purple">
+      <div class="model-name">Farneback OF</div>
+      <div class="model-role">Dense Optical Flow (No Train)</div>
+      <div class="model-stat"><span class="stat-key">Type</span><span class="stat-val" style="color:var(--accent2)">Traditional CV</span></div>
+      <div class="model-stat"><span class="stat-key">Library</span><span class="stat-val">OpenCV</span></div>
+      <div class="model-stat"><span class="stat-key">GPU Required</span><span class="stat-val" style="color:var(--accent2)">ไม่ต้อง ✅</span></div>
+      <div class="model-stat"><span class="stat-key">Speed</span><span class="stat-val">~15-25 FPS (CPU)</span></div>
+      <div class="model-stat"><span class="stat-key">Output</span><span class="stat-val">flow (H,W,2)</span></div>
+    </div>
+    <div class="model-card green">
+      <div class="model-name">Lucas-Kanade</div>
+      <div class="model-role">Sparse Optical Flow (Faster)</div>
+      <div class="model-stat"><span class="stat-key">Type</span><span class="stat-val" style="color:var(--accent2)">Sparse (corners)</span></div>
+      <div class="model-stat"><span class="stat-key">Speed</span><span class="stat-val" style="color:var(--accent2)">~30+ FPS (CPU)</span></div>
+      <div class="model-stat"><span class="stat-key">Accuracy</span><span class="stat-val">ต่ำกว่า Farneback</span></div>
+      <div class="model-stat"><span class="stat-key">ใช้เมื่อ</span><span class="stat-val">Hardware จำกัด</span></div>
+      <div class="model-stat"><span class="stat-key">Feature</span><span class="stat-val">ShiTomasi corners</span></div>
+    </div>
+    <div class="model-card orange">
+      <div class="model-name">RAFT</div>
+      <div class="model-role">Deep Learning Flow (Best Quality)</div>
+      <div class="model-stat"><span class="stat-key">Type</span><span class="stat-val">DL-based</span></div>
+      <div class="model-stat"><span class="stat-key">GPU Required</span><span class="stat-val" style="color:var(--accent3)">แนะนำ GPU ❗</span></div>
+      <div class="model-stat"><span class="stat-key">Quality</span><span class="stat-val" style="color:var(--accent2)">สูงสุด ⭐⭐⭐</span></div>
+      <div class="model-stat"><span class="stat-key">ใช้เมื่อ</span><span class="stat-val">มี GPU + ต้องการแม่น</span></div>
+      <div class="model-stat"><span class="stat-key">Library</span><span class="stat-val">torchvision</span></div>
+    </div>
+  </div>
+
+  <!-- Full Code Example -->
+  <div class="section-header">Code Structure</div>
+
+  <div class="code-block">
+    <div class="code-header">
+      <div class="code-dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+      <span class="code-lang">PYTHON — drum_rotation_detector.py</span>
+    </div>
+    <pre><span class="c-comment"># ==============================
+# Drum Rotation Detector Pipeline
+# ==============================</span>
+
+<span class="c-blue">import</span> cv2
+<span class="c-blue">import</span> numpy <span class="c-blue">as</span> np
+<span class="c-blue">from</span> ultralytics <span class="c-blue">import</span> YOLO
+<span class="c-blue">from</span> collections <span class="c-blue">import</span> deque
+
+<span class="c-comment"># --- Config ---</span>
+MODEL_PATH = <span class="c-yellow">"best.pt"</span>          <span class="c-comment"># YOLOv8 trained model</span>
+DRUM_CLASS_ID = <span class="c-orange">0</span>               <span class="c-comment"># class index ของ drum</span>
+MAG_THRESHOLD = <span class="c-orange">1.5</span>             <span class="c-comment"># pixel/frame</span>
+SMOOTHING_FRAMES = <span class="c-orange">8</span>            <span class="c-comment"># temporal smoothing</span>
+
+<span class="c-purple">class</span> <span class="c-green">DrumRotationDetector</span>:
+    <span class="c-purple">def</span> <span class="c-blue">__init__</span>(self):
+        self.model = YOLO(MODEL_PATH)
+        self.prev_gray = <span class="c-blue">None</span>
+        self.score_buffer = deque(maxlen=SMOOTHING_FRAMES)
+
+    <span class="c-purple">def</span> <span class="c-blue">detect_drum</span>(self, frame):
+        <span class="c-comment">"""Step 1: YOLO detect drum bbox"""</span>
+        results = self.model(frame, verbose=<span class="c-blue">False</span>)[<span class="c-orange">0</span>]
+        <span class="c-blue">for</span> box <span class="c-blue">in</span> results.boxes:
+            <span class="c-blue">if</span> int(box.cls) == DRUM_CLASS_ID:
+                x1,y1,x2,y2 = map(int, box.xyxy[<span class="c-orange">0</span>])
+                <span class="c-blue">return</span> (x1, y1, x2, y2)
+        <span class="c-blue">return None</span>
+
+    <span class="c-purple">def</span> <span class="c-blue">crop_drum</span>(self, frame, bbox):
+        <span class="c-comment">"""Step 2: Crop ROI with padding"""</span>
+        x1,y1,x2,y2 = bbox
+        pad = <span class="c-orange">10</span>
+        h, w = frame.shape[:<span class="c-orange">2</span>]
+        x1,y1 = max(<span class="c-orange">0</span>,x1-pad), max(<span class="c-orange">0</span>,y1-pad)
+        x2,y2 = min(w,x2+pad), min(h,y2+pad)
+        <span class="c-blue">return</span> frame[y1:y2, x1:x2]
+
+    <span class="c-purple">def</span> <span class="c-blue">calc_rotation_score</span>(self, curr_crop):
+        <span class="c-comment">"""Step 3-4: Optical Flow + Rotation Score"""</span>
+        curr_gray = cv2.cvtColor(curr_crop, cv2.COLOR_BGR2GRAY)
+        <span class="c-blue">if</span> self.prev_gray <span class="c-blue">is None</span>:
+            self.prev_gray = curr_gray
+            <span class="c-blue">return</span> <span class="c-orange">0.0</span>
+        
+        <span class="c-comment"># Resize ให้ match ถ้า bbox เปลี่ยน</span>
+        target_h, target_w = self.prev_gray.shape
+        curr_resized = cv2.resize(curr_gray, (target_w, target_h))
+        
+        flow = cv2.calcOpticalFlowFarneback(
+            self.prev_gray, curr_resized, <span class="c-blue">None</span>,
+            <span class="c-orange">0.5</span>, <span class="c-orange">3</span>, <span class="c-orange">15</span>, <span class="c-orange">3</span>, <span class="c-orange">5</span>, <span class="c-orange">1.2</span>, <span class="c-orange">0</span>
+        )
+        mag, _ = cv2.cartToPolar(flow[...,<span class="c-orange">0</span>], flow[...,<span class="c-orange">1</span>])
+        self.prev_gray = curr_resized
+        <span class="c-blue">return</span> float(np.mean(mag))
+
+    <span class="c-purple">def</span> <span class="c-blue">process_frame</span>(self, frame):
+        <span class="c-comment">"""Full pipeline per frame"""</span>
+        bbox = self.detect_drum(frame)
+        <span class="c-blue">if</span> bbox <span class="c-blue">is None</span>:
+            <span class="c-blue">return</span> <span class="c-yellow">"NO_DRUM"</span>, frame
+
+        crop = self.crop_drum(frame, bbox)
+        score = self.calc_rotation_score(crop)
+        self.score_buffer.append(score)
+
+        <span class="c-comment"># Smooth decision</span>
+        avg_score = np.mean(self.score_buffer)
+        status = <span class="c-yellow">"ROTATING"</span> <span class="c-blue">if</span> avg_score > MAG_THRESHOLD <span class="c-blue">else</span> <span class="c-yellow">"STOPPED"</span>
+        
+        <span class="c-comment"># Draw</span>
+        color = (<span class="c-orange">0</span>,<span class="c-orange">255</span>,<span class="c-orange">0</span>) <span class="c-blue">if</span> status==<span class="c-yellow">"ROTATING"</span> <span class="c-blue">else</span> (<span class="c-orange">0</span>,<span class="c-orange">0</span>,<span class="c-orange">255</span>)
+        cv2.rectangle(frame, bbox[:<span class="c-orange">2</span>], bbox[<span class="c-orange">2</span>:], color, <span class="c-orange">2</span>)
+        cv2.putText(frame, f<span class="c-yellow">"{status} ({avg_score:.2f})"</span>,
+                    (bbox[<span class="c-orange">0</span>], bbox[<span class="c-orange">1</span>]-<span class="c-orange">10</span>),
+                    cv2.FONT_HERSHEY_SIMPLEX, <span class="c-orange">0.6</span>, color, <span class="c-orange">2</span>)
+        <span class="c-blue">return</span> status, frame</pre>
+  </div>
+
+  <!-- Tips -->
+  <div class="section-header">Tips & Pitfalls</div>
+
+  <div class="tips-grid">
+    <div class="tip-card">
+      <div class="tip-icon">📦</div>
+      <div class="tip-title">Dataset สำหรับ YOLO</div>
+      <div class="tip-text">ต้องการ 200-500 ภาพขั้นต่ำ แนะนำใช้ <strong>Roboflow</strong> annotate + augment — label เฉพาะ "drum" ไม่ต้อง label ทั้งรถ จะให้ผลดีกว่า</div>
+    </div>
+    <div class="tip-card">
+      <div class="tip-icon">🚗</div>
+      <div class="tip-title">Camera Motion Problem</div>
+      <div class="tip-text">ถ้ากล้องเคลื่อน (ติดรถ) Optical Flow จะ noisy — ต้องทำ <strong>Camera Stabilization</strong> ก่อน หรือใช้ Background Subtraction ช่วย</div>
+    </div>
+    <div class="tip-card">
+      <div class="tip-icon">🔦</div>
+      <div class="tip-title">แสงและสีของโม่</div>
+      <div class="tip-text">โม่ที่สีเดียวกันหมด (เทาล้วน) Optical Flow จะทำงานได้แย่ลง — ใช้ edge ช่วยหรือ combine กับ texture analysis เพิ่มเติม</div>
+    </div>
+    <div class="tip-card">
+      <div class="tip-icon">⏱️</div>
+      <div class="tip-title">Temporal Smoothing</div>
+      <div class="tip-text">อย่าตัดสินจาก frame เดียว — buffer 5-10 frames แล้วค่อย output สถานะ จะลด false alarm จากการสั่นของรถหรือ noise ได้มาก</div>
+    </div>
+    <div class="tip-card">
+      <div class="tip-icon">🎯</div>
+      <div class="tip-title">Threshold Tuning</div>
+      <div class="tip-text">ค่า threshold ขึ้นกับ resolution, FPS, และระยะห่างกล้อง — ต้อง tune จาก validation video จริง ไม่ควรใช้ค่า hardcode</div>
+    </div>
+    <div class="tip-card">
+      <div class="tip-icon">💻</div>
+      <div class="tip-title">Hardware Estimate</div>
+      <div class="tip-text">CPU เพียงพอสำหรับ 1 กล้อง (YOLOv8n + Farneback) ที่ ~15-20 FPS — ถ้า multi-camera แนะนำ GPU หรือ Jetson Nano</div>
+    </div>
+  </div>
+
+  <!-- Training Steps -->
+  <div class="section-header">Training Steps (YOLO)</div>
+
+  <div class="code-block">
+    <div class="code-header">
+      <div class="code-dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+      <span class="code-lang">BASH — Training Commands</span>
+    </div>
+    <pre><span class="c-comment"># 1. Install</span>
+pip install ultralytics roboflow
+
+<span class="c-comment"># 2. Download dataset จาก Roboflow (หลัง annotate แล้ว)</span>
+<span class="c-purple">from</span> roboflow <span class="c-purple">import</span> Roboflow
+rf = Roboflow(api_key=<span class="c-yellow">"YOUR_KEY"</span>)
+project = rf.workspace(<span class="c-yellow">"your-workspace"</span>).project(<span class="c-yellow">"drum-detection"</span>)
+dataset = project.version(<span class="c-orange">1</span>).download(<span class="c-yellow">"yolov8"</span>)
+
+<span class="c-comment"># 3. Train</span>
+yolo train model=yolov8n.pt data=dataset/data.yaml \
+    epochs=<span class="c-orange">100</span> imgsz=<span class="c-orange">640</span> batch=<span class="c-orange">16</span> \
+    name=drum_detector patience=<span class="c-orange">20</span>
+
+<span class="c-comment"># 4. Validate</span>
+yolo val model=runs/detect/drum_detector/weights/best.pt \
+    data=dataset/data.yaml
+
+<span class="c-comment"># 5. Export สำหรับ Deploy (optional)</span>
+yolo export model=best.pt format=onnx  <span class="c-comment"># สำหรับ CPU deploy</span></pre>
+  </div>
+
+  <div class="footer">
+    Concrete Mixer Drum Rotation Detection Pipeline Guide · YOLOv8 + Optical Flow
+  </div>
+
+</div>
+</body>
+</html>
