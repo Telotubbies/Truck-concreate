@@ -1,0 +1,409 @@
+# ============================================================================
+# Concrete Mixer Truck Detection System - Configuration
+# YAML Configuration for all parameters
+# ============================================================================
+
+# Project Information
+project:
+  name: "concrete_mixer_obb_detection"
+  version: "1.0.0"
+  author: "Senior Computer Vision Engineer"
+  description: "Real-time detection and state classification of concrete mixer trucks"
+
+# ============================================================================
+# Dataset Configuration
+# ============================================================================
+dataset:
+  # Data directories
+  data_dir: "./data"
+  merged_dir: "./merged_dataset"
+  auto_labeled_dir: "./auto_labeled"
+  
+  # Dataset names
+  dataset_1_name: "Mixer.yolo26"
+  dataset_2_name: "concrete mixed truck.yolo26"
+  
+  # Dataset statistics
+  dataset_1_images: 736
+  dataset_2_images: 74
+  
+  # Classes
+  num_classes: 2
+  classes:
+    0: "truck"
+    1: "mixer_drum"
+  
+  # Data split
+  train_split: 0.8
+  val_split: 0.2
+
+# ============================================================================
+# Model Configuration
+# ============================================================================
+model:
+  # Model architecture
+  name: "yolo26n-obb.pt"
+  type: "OBB"  # Oriented Bounding Box
+  variant: "nano"  # Nano variant for edge deployment
+  
+  # Input configuration
+  input_size: 640
+  channels: 3
+  
+  # Training parameters
+  batch_size: 4
+  epochs: 3
+  patience: 20  # Early stopping patience
+  save_period: 10  # Save checkpoint every N epochs
+  
+  # Optimizer
+  optimizer: "SGD"
+  learning_rate: 0.01
+  momentum: 0.937
+  weight_decay: 0.0005
+  
+  # Learning rate scheduler
+  lr_scheduler: "cosine"
+  warmup_epochs: 3
+  warmup_momentum: 0.8
+  warmup_bias_lr: 0.1
+  
+  # Loss weights
+  box_loss_gain: 7.5
+  cls_loss_gain: 0.5
+  dfl_loss_gain: 1.5
+
+# ============================================================================
+# Data Augmentation Configuration
+# ============================================================================
+augmentation:
+  # Geometric augmentations
+  degrees: 45.0          # Rotation range (±degrees)
+  translate: 0.1         # Translation (fraction of image size)
+  scale: 0.5             # Scale range (gain)
+  shear: 0.0             # Shear angle (degrees)
+  perspective: 0.001     # Perspective distortion
+  
+  # Flip augmentations
+  flipud: 0.0            # Vertical flip probability
+  fliplr: 0.5            # Horizontal flip probability
+  
+  # Mosaic and mixup
+  mosaic: 1.0            # Mosaic augmentation probability
+  mixup: 0.1             # MixUp augmentation probability
+  copy_paste: 0.0        # Copy-paste augmentation probability
+  
+  # Color augmentations
+  hsv_h: 0.015           # HSV-Hue augmentation (fraction)
+  hsv_s: 0.7             # HSV-Saturation augmentation (fraction)
+  hsv_v: 0.4             # HSV-Value augmentation (fraction)
+  
+  # Additional augmentations
+  auto_augment: "randaugment"  # Auto augmentation policy
+  erasing: 0.4           # Random erasing probability
+
+# ============================================================================
+# Rotation Detection Configuration
+# ============================================================================
+rotation_detection:
+  # Optical Flow parameters (Farneback)
+  optical_flow:
+    enabled: true
+    magnitude_threshold: 2.0      # Minimum flow magnitude for rotation
+    pyr_scale: 0.5                # Pyramid scale
+    winsize: 15                   # Averaging window size
+    iterations: 3                 # Number of iterations
+    poly_n: 5                     # Polynomial expansion size
+    poly_sigma: 1.2               # Gaussian sigma
+    circular_threshold: 0.3       # Circular pattern threshold
+  
+  # SSIM (Structural Similarity) parameters
+  ssim:
+    enabled: true
+    threshold: 0.85               # SSIM threshold (lower = more change)
+    pixel_diff_threshold: 0.15    # Pixel difference ratio threshold
+    pixel_diff_intensity: 30      # Minimum intensity difference
+    win_size: 7                   # Window size for SSIM
+  
+  # ROI extraction
+  roi:
+    padding: 20                   # Extra pixels around ROI
+    min_size: 10                  # Minimum ROI size (pixels)
+    interpolation: "linear"       # Warp interpolation method
+    border_mode: "replicate"      # Border extrapolation method
+
+# ============================================================================
+# State Machine Configuration
+# ============================================================================
+state_machine:
+  # Truck movement detection
+  velocity_threshold: 5.0         # Minimum velocity for "moving" (pixels/frame)
+  position_history_size: 10       # Number of positions to track
+  
+  # State classification
+  state_history_size: 5           # Number of states for smoothing
+  confidence_threshold: 0.6       # Minimum confidence for state
+  
+  # State definitions
+  states:
+    - name: "POURING_CONCRETE"
+      truck_moving: false
+      drum_rotating: true
+      color: [0, 0, 255]          # Red (BGR)
+      priority: 1
+    
+    - name: "IN_TRANSIT"
+      truck_moving: true
+      drum_rotating: true
+      color: [0, 255, 255]        # Yellow (BGR)
+      priority: 2
+    
+    - name: "IDLE_WAITING"
+      truck_moving: false
+      drum_rotating: false
+      color: [0, 255, 0]          # Green (BGR)
+      priority: 3
+    
+    - name: "UNKNOWN"
+      truck_moving: null
+      drum_rotating: null
+      color: [128, 128, 128]      # Gray (BGR)
+      priority: 4
+
+# ============================================================================
+# MLflow Configuration
+# ============================================================================
+mlflow:
+  # Tracking
+  tracking_dir: "./mlruns"
+  tracking_uri: "file://./mlruns"
+  
+  # Experiment
+  experiment_name: "concrete_mixer_obb_yolo26n"
+  run_name_prefix: "yolo26n_obb"
+  
+  # Logging
+  log_models: true
+  log_artifacts: true
+  log_params: true
+  log_metrics: true
+  
+  # Artifacts to log
+  artifacts:
+    - "weights/best.pt"
+    - "weights/last.pt"
+    - "confusion_matrix.png"
+    - "results.csv"
+    - "train_batch*.jpg"
+  
+  # Tags
+  tags:
+    model_architecture: "YOLO26n-OBB"
+    task: "concrete_mixer_detection"
+    framework: "ultralytics"
+    augmentation_strategy: "aggressive_multi_viewpoint"
+
+# ============================================================================
+# Paths Configuration
+# ============================================================================
+paths:
+  # Output directories
+  runs_dir: "runs/obb"
+  models_dir: "./models"
+  logs_dir: "./logs"
+  deployment_dir: "./deployment"
+  cache_dir: "./cache"
+  
+  # Model naming
+  model_name: "mixer_truck_yolo26n"
+  checkpoint_format: "epoch_{epoch}_map_{map:.4f}.pt"
+  
+  # Logging
+  log_file: "training.log"
+  tensorboard_dir: "./tensorboard"
+
+# ============================================================================
+# Video Processing Configuration
+# ============================================================================
+video_processing:
+  # Input/Output
+  default_output_name: "output_analysis.mp4"
+  codec: "mp4v"  # Video codec
+  
+  # Processing
+  fps: null  # null = use source FPS
+  resize: null  # null = keep original size, or [width, height]
+  skip_frames: 0  # Process every Nth frame (0 = all frames)
+  
+  # Visualization
+  show_bbox: true
+  show_labels: true
+  show_confidence: true
+  show_state: true
+  show_rotation_status: true
+  
+  # Text overlay
+  font_scale: 1.0
+  font_thickness: 2
+  font_color: [255, 255, 255]  # White (BGR)
+  
+  # Performance
+  batch_processing: false
+  gpu_acceleration: true
+
+# ============================================================================
+# Inference Configuration
+# ============================================================================
+inference:
+  # Detection parameters
+  conf_threshold: 0.25      # Confidence threshold
+  iou_threshold: 0.45       # NMS IoU threshold
+  max_det: 300              # Maximum detections per image
+  
+  # Device
+  device: "cuda:0"          # cuda:0, cpu, or mps
+  half_precision: false     # Use FP16 inference
+  
+  # Post-processing
+  agnostic_nms: false       # Class-agnostic NMS
+  multi_label: false        # Multiple labels per box
+  
+  # Visualization
+  line_width: 2             # Bounding box line width
+  show_labels: true         # Show class labels
+  show_conf: true           # Show confidence scores
+
+# ============================================================================
+# Export Configuration
+# ============================================================================
+export:
+  # Export formats
+  formats:
+    - "onnx"
+    - "torchscript"
+    - "engine"  # TensorRT
+  
+  # ONNX export
+  onnx:
+    opset_version: 12
+    dynamic_axes: true
+    simplify: true
+  
+  # TensorRT export
+  tensorrt:
+    workspace: 4  # GB
+    fp16: true
+    int8: false
+  
+  # Optimization
+  optimize: true
+  half: false
+
+# ============================================================================
+# Logging Configuration
+# ============================================================================
+logging:
+  # Console logging
+  console_level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  console_format: "[%(levelname)s] %(message)s"
+  
+  # File logging
+  file_level: "DEBUG"
+  file_format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  max_bytes: 10485760  # 10MB
+  backup_count: 5
+  
+  # Progress bar
+  show_progress: true
+  progress_bar_style: "tqdm"
+
+# ============================================================================
+# System Configuration
+# ============================================================================
+system:
+  # Random seed
+  seed: 42
+  deterministic: true
+  
+  # Performance
+  workers: 8              # Number of data loading workers
+  pin_memory: true        # Pin memory for faster GPU transfer
+  
+  # CUDA
+  cuda_benchmark: true    # Enable CUDA benchmark mode
+  cuda_deterministic: false
+  
+  # Memory
+  empty_cache: true       # Empty CUDA cache after training
+  
+  # Distributed training
+  distributed: false
+  world_size: 1
+  rank: 0
+
+# ============================================================================
+# Validation Configuration
+# ============================================================================
+validation:
+  # Validation parameters
+  val_batch_size: 32
+  val_interval: 1         # Validate every N epochs
+  save_json: true         # Save validation results as JSON
+  save_hybrid: false      # Save hybrid version
+  
+  # Metrics
+  metrics:
+    - "mAP50"
+    - "mAP50-95"
+    - "precision"
+    - "recall"
+    - "F1"
+  
+  # Plots
+  plots:
+    - "confusion_matrix"
+    - "PR_curve"
+    - "F1_curve"
+
+# ============================================================================
+# Deployment Configuration
+# ============================================================================
+deployment:
+  # Target platform
+  platform: "edge"  # edge, cloud, mobile
+  
+  # Model optimization
+  quantization: false
+  pruning: false
+  
+  # API configuration
+  api:
+    host: "0.0.0.0"
+    port: 8000
+    workers: 4
+    timeout: 30
+  
+  # Docker
+  docker:
+    base_image: "ultralytics/ultralytics:latest"
+    expose_port: 8000
+
+# ============================================================================
+# Debug Configuration
+# ============================================================================
+debug:
+  # Debug mode
+  enabled: false
+  
+  # Visualization
+  save_debug_images: false
+  debug_image_interval: 10
+  
+  # Profiling
+  profile_training: false
+  profile_inference: false
+  
+  # Verbose
+  verbose: false
+  print_model: false
+  print_config: true
